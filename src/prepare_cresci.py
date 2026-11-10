@@ -5,7 +5,7 @@ import pandas as pd
 # Cesty k datasetu
 BASE_DIR = Path(__file__).resolve().parent
 RAW_DIR = BASE_DIR / "data" / "raw" / "cresci-2017"
-OUTPUT_DIR = BASE_DIR / "data" / "processed"
+OUTPUT_DIR = BASE_DIR / "data" / "processed" 
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -43,6 +43,10 @@ def find_column(df, possible_names):
 
     return None
 
+def normalize_id(series):
+    """Prevedie ID na celé číslo ako text (1502026416.0 -> '1502026416')."""
+    return pd.to_numeric(series, errors="coerce").astype("Int64").astype("string")
+
 
 def prepare_category(category, label):
     folder = RAW_DIR / category
@@ -74,9 +78,18 @@ def prepare_category(category, label):
             "Skontroluj názvy ID stĺpcov a uprav ich v skripte."
         )
 
+    raw_ids = tweets[tweet_user_id_col]
+    print("Použitý stĺpec:", tweet_user_id_col)
+    print("Chýbajúce user_id v tweetoch:", raw_ids.isna().sum(), "z", len(raw_ids))
+    print("Unikátne user_id v tweetoch:", raw_ids.nunique())
+    print("Ukážka ID z tweets:", raw_ids.dropna().head(3).tolist())
+    print("Ukážka ID z users:", users[user_id_col].head(3).tolist())
+
     # Zjednoť formát ID, aby sa dali spojiť
-    users[user_id_col] = users[user_id_col].astype("string")
-    tweets[tweet_user_id_col] = tweets[tweet_user_id_col].astype("string")
+    users[user_id_col] = normalize_id(users[user_id_col])
+    tweets[tweet_user_id_col] = normalize_id(tweets[tweet_user_id_col])
+    users = users.dropna(subset=[user_id_col])
+    tweets = tweets.dropna(subset=[tweet_user_id_col])
 
     users = users.drop_duplicates(subset=[user_id_col]).copy()
     users = users.rename(columns={user_id_col: "user_id"})
@@ -97,6 +110,8 @@ def prepare_category(category, label):
         tweet_user_id_col: "user_id",
         text_col: "tweet_text"
     })
+    matched = users["user_id"].isin(tweets["user_id"]).sum()
+    print(f"Účty s aspoň jedným tweetom: {matched} / {len(users)}")
 
     tweets["tweet_text"] = tweets["tweet_text"].fillna("").astype(str)
     tweets = tweets[tweets["tweet_text"].str.strip() != ""]
@@ -166,6 +181,17 @@ def main():
 
     # Odstránenie záznamov bez použiteľného textu
     combined = combined[combined["text"].str.strip() != ""].copy()
+        # Kontrola skreslenia: líšia sa ľudia s tweetmi od tých bez nich?
+    has_tweets = combined["tweets_text"].str.strip() != ""
+    print("\nMediány metadát u ľudí (s tweetmi = True / bez = False):")
+    print(
+        combined[combined["label_name"] == "human"]
+        .groupby(has_tweets)[["statuses_count", "followers_count", "friends_count"]]
+        .median()
+    )
+
+    # Vyhodenie účtov bez tweetov
+    combined = combined[has_tweets].copy()
 
     output_file = OUTPUT_DIR / "cresci_prepared.csv"
     combined.to_csv(output_file, index=False, encoding="utf-8")
