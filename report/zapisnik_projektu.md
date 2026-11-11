@@ -82,17 +82,37 @@ Dataset obsahuje len `social_spambots_1` (991 účtov). Model sa teda učí rozp
 
 Kostra projektu s prázdnymi priečinkami sa po fetchi na druhom počítači nevytvorila, pretože Git sleduje len súbory. Riešenie: súbor `.gitkeep` v každom prázdnom priečinku. Pozor na `.gitignore`: ak sa ignoruje napr. `data/raw/`, treba výnimku (`data/raw/*` a `!data/raw/.gitkeep`). Surové tweety sú v `.gitignore` kvôli veľkosti (súbor má stovky MB).
 
+
+### 4.6 Cresci-17: vplyv `favourites_count` a ablačná štúdia
+
+- **Zistenie:** Pri porovnaní metadát botov a ľudských účtov sa ukázal výrazný rozdiel v `favourites_count`, teda v počte označení cudzích príspevkov ako obľúbených. Medián bol pri botoch **0**, pri ľudských účtoch **1 492**.
+- **Podiel nulových hodnôt:** `favourites_count = 0` malo **91,5 % botov**, ale iba **0,9 % ľudských účtov**. V použitej kategórii `social_spambots_1` teda väčšina botov takmer vôbec nelajkovala cudzie tweety, zatiaľ čo ľudské účty túto funkciu využívali častejšie.
+- **Ablácia:** Aby sme zistili, či tento príznak skutočne pomáha modelu, zopakovali sme tréning Random Forest bez `favourites_count`, pri zachovaní rovnakého rozdelenia dát a ostatných nastavení.
+- **Výsledok:** Po odstránení `favourites_count` klesla testovacia Accuracy z **97,44 % na 96,79 %** a F1-score z **97,26 % na 96,60 %**. Recall zostal rovnaký (**95,30 %**), zatiaľ čo Precision klesla z **99,30 % na 97,93 %**.
+- **Ďalšia ablácia:** Pri odstránení troch príznakov (`favourites_count`, `statuses_count` a `statuses_per_day`) dosiahol Random Forest na teste Accuracy **96,15 %** a F1-score **95,92 %**.
+- **Interpretácia:** `favourites_count` modelu pomáha, ale nie je jediným príznakom, na ktorom stojí jeho výkon. Po jeho odstránení zostali výsledky stále vysoké. Rozdiel zároveň naznačuje, že správanie účtov v tomto datasete je užitočným signálom. Treba však uviesť, že ide o konkrétnu skupinu `social_spambots_1`; nedá sa z toho vyvodiť, že všetky bot účty na sociálnych sieťach nelajkujú príspevky.
+
 ## 5. Chronologický denník
 
-### 11. 11. 2026
+### 10. 11. 2026
 
-- Dokončené stiahnutie oboch datasetov a prípravné skripty.
+
 - Vytvorený a spustený notebook `01_exploracia_dat.ipynb`.
 - Odhalený a opravený leak v Unmasking (časť 4.1).
 - Odhalený problém s textami a chýbajúcimi tweetmi v Cresci-17, upravený `prepare_cresci.py` (časti 4.2 až 4.3).
 - Notebook s exploráciou prepísaný na nové súbory `cresci_prepared.csv` a `unmasking_clean.csv`.
 - Opravená kostra projektu v Gite (časť 4.5).
 - **Ďalší krok:** spustiť novú verziu notebooku, skontrolovať dĺžky `tweets_text` oboch tried, potom `02_baseline_bot_metadata.ipynb`.
+
+### 11. 11. 2026 – prvé experimenty detekcie botov
+
+- Vytvorený a spustený notebook `02_bot_detection.ipynb`.
+- Pripravené rozdelenie Cresci-17 na train/validation/test v pomere 70/15/15, stratifikované podľa triedy a vykonané na úrovni účtov. Rozdelenie obsahovalo 1 451 účtov v train, 311 vo validation a 312 v teste.
+- Natrénované a porovnané modely založené na metadátach, texte tweetov (TF-IDF + Logistic Regression) a kombinácii metadát s textom.
+- Najlepší výsledok podľa F1 na validačnej množine dosiahol textový model TF-IDF + Logistic Regression. Na testovacej množine dosiahol F1 **99,66 %**.
+- Zistený výrazný rozdiel v `favourites_count`: nulovú hodnotu malo 91,5 % botov a 0,9 % ľudských účtov.
+- Vykonaná ablácia Random Forest bez `favourites_count` a ďalšia ablácia bez troch príznakov. Po odstránení `favourites_count` kleslo testovacie F1 z 97,26 % na 96,60 %.
+- **Ďalší krok:** preveriť, či takmer dokonalý výsledok textového modelu nesúvisí s uniformitou tweetov v použitej kategórii botov; následne pokračovať transformerom (DistilBERT) a experimentmi na Unmasking the Imposters.
 
 *(Nový záznam pridať sem.)*
 
@@ -101,11 +121,22 @@ Kostra projektu s prázdnymi priečinkami sa po fetchi na druhom počítači nev
 ### 6.1 Detekcia botov (Cresci-17)
 
 | Experiment | Accuracy | Precision | Recall | F1 |
-| --- | --- | --- | --- | --- |
-| Metadáta (Random Forest / LR) | | | | |
-| Text (TF-IDF + LR) | | | | |
-| Metadáta + text (spoločný model) | | | | |
-| Transformer (DistilBERT) | | | | |
+| --- | ---: | ---: | ---: | ---: |
+| Metadáta – Logistic Regression | 97,12 % | 97,95 % | 95,97 % | 96,95 % |
+| Metadáta – Random Forest | 97,44 % | 99,30 % | 95,30 % | 97,26 % |
+| Text – TF-IDF + Logistic Regression | 99,68 % | 100,00 % | 99,33 % | 99,66 % |
+| Metadáta + text – Logistic Regression | 99,04 % | 100,00 % | 97,99 % | 98,98 % |
+| Transformer (DistilBERT) | – | – | – | – |
+
+**Poznámka:** Hodnoty v tabuľke sú z testovacej množiny. Výber najlepšieho modelu sa robil podľa F1 na validačnej množine. Textový model dosiahol na validácii F1 = 100 %, preto je vhodné jeho takmer dokonalý výsledok interpretovať opatrne vzhľadom na uniformitu tweetov v použitej kategórii botov.
+
+#### Ablácia metadátového Random Forest
+
+| Variant | Accuracy | Precision | Recall | F1 |
+| --- | ---: | ---: | ---: | ---: |
+| Všetky metadáta | 97,44 % | 99,30 % | 95,30 % | 97,26 % |
+| Bez `favourites_count` | 96,79 % | 97,93 % | 95,30 % | 96,60 % |
+| Bez `favourites_count`, `statuses_count` a `statuses_per_day` | 96,15 % | 97,24 % | 94,63 % | 95,92 % |
 
 ### 6.2 Detekcia AI textov (Unmasking)
 

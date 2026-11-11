@@ -1,0 +1,9 @@
+experiment,split,accuracy,precision,recall,f1
+1a Metadáta – Logistic Regression,val,0.9743,0.9732,0.9732,0.9732
+1a Metadáta – Logistic Regression,test,0.9712,0.9795,0.9597,0.9695
+1b Metadáta – Random Forest,val,0.9839,0.9932,0.9732,0.9831
+1b Metadáta – Random Forest,test,0.9744,0.993,0.953,0.9726
+2 Text – TF-IDF + LR,val,1.0,1.0,1.0,1.0
+2 Text – TF-IDF + LR,test,0.9968,1.0,0.9933,0.9966
+3 Metadáta + text – LR,val,0.9871,0.9932,0.9799,0.9865
+3 Metadáta + text – LR,test,0.9904,1.0,0.9799,0.9898
